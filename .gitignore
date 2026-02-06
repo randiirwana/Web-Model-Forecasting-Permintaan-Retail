@@ -31,6 +31,7 @@ wheels/
 
 # Data files (uncomment jika tidak ingin commit data)
 # *.csv
+sales.csv
 
 # Model files
 *.h5
