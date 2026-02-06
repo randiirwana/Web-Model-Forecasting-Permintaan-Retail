@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import datetime as dt
+from pathlib import Path
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
@@ -40,8 +41,9 @@ uploaded_file = st.sidebar.file_uploader(
 
 # Fungsi untuk load dan preprocessing data
 @st.cache_data
-def _load_default_data():
-    df = pd.read_csv("sales.csv")
+def _load_default_data(csv_path: str):
+    """Load CSV (full atau sample) dan lakukan preprocessing."""
+    df = pd.read_csv(csv_path)
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values("date")
 
@@ -85,15 +87,33 @@ def load_data(uploaded_file):
             st.error(f"Gagal membaca file upload: {e}")
             return None
 
-    # Jika tidak ada upload → coba baca sales.csv lokal (cached)
+    # Jika tidak ada upload → coba baca file lokal (sales.csv atau sales_sample.csv)
+    base_dir = Path(__file__).resolve().parent
+    full_path = base_dir / "sales.csv"
+    sample_path = base_dir / "sales_sample.csv"
+
     try:
-        df = _load_default_data()
-        return df
-    except FileNotFoundError:
-        st.error("File 'sales.csv' tidak ditemukan. Upload file CSV atau letakkan 'sales.csv' di direktori yang sama dengan aplikasi.")
-        return None
+        if full_path.exists():
+            df = _load_default_data(str(full_path))
+            st.info("Data dibaca dari file lokal 'sales.csv' (full dataset, di direktori yang sama dengan app.py).")
+            return df
+        elif sample_path.exists():
+            df = _load_default_data(str(sample_path))
+            st.warning(
+                "Data dibaca dari 'sales_sample.csv' (subset data untuk demo / deployment). "
+                "Untuk hasil evaluasi akhir di laporan, gunakan full 'sales.csv' secara lokal."
+            )
+            return df
+        else:
+            raise FileNotFoundError("Tidak menemukan 'sales.csv' maupun 'sales_sample.csv'.")
     except Exception as e:
-        st.error(f"Error loading data: {e}")
+        st.error(
+            "Gagal memuat data lokal.\n\n"
+            f"Detail: {e}\n\n"
+            "Solusi:\n"
+            "- Di lokal: simpan 'sales.csv' di folder yang sama dengan 'app.py'.\n"
+            "- Untuk GitHub/deploy: buat file kecil 'sales_sample.csv' (misalnya 5–10 ribu baris) dan commit ke repo."
+        )
         return None
 
 # Fungsi untuk training model
