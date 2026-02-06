@@ -30,27 +30,70 @@ page = st.sidebar.selectbox(
     ["🏠 Beranda", "📈 Visualisasi Data", "🤖 Evaluasi Model", "🔮 Forecast", "📊 Perbandingan Model"]
 )
 
+# Input file CSV (opsional)
+uploaded_file = st.sidebar.file_uploader(
+    "Upload data retail (CSV) – opsional",
+    type=["csv"],
+    help="Jika tidak mengupload file, aplikasi akan mencoba membaca 'sales.csv' di direktori yang sama dengan app."
+)
+
+
 # Fungsi untuk load dan preprocessing data
 @st.cache_data
-def load_data():
+def _load_default_data():
+    df = pd.read_csv("sales.csv")
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date")
+
+    # Preprocessing
+    if "date" in df.columns:
+        df = df.set_index("date").resample("D").sum().fillna(0)
+    elif df.index.name == "date" or isinstance(df.index, pd.DatetimeIndex):
+        df = df.resample("D").sum().fillna(0)
+    else:
+        date_cols = [col for col in df.columns if "date" in col.lower() or "time" in col.lower()]
+        if date_cols:
+            df = df.set_index(date_cols[0]).resample("D").sum().fillna(0)
+
+    return df
+
+
+def load_data(uploaded_file):
+    """
+    Jika user upload CSV → pakai file itu.
+    Kalau tidak → coba baca 'sales.csv' lokal.
+    """
+    # Jika user upload file sendiri
+    if uploaded_file is not None:
+        try:
+            df = pd.read_csv(uploaded_file)
+            if "date" not in df.columns:
+                st.error("File yang di-upload harus memiliki kolom 'date'.")
+                return None
+
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.sort_values("date")
+
+            if "date" in df.columns:
+                df = df.set_index("date").resample("D").sum().fillna(0)
+            elif df.index.name == "date" or isinstance(df.index, pd.DatetimeIndex):
+                df = df.resample("D").sum().fillna(0)
+
+            st.success(f"Data berhasil di-load dari file upload: '{uploaded_file.name}'")
+            return df
+        except Exception as e:
+            st.error(f"Gagal membaca file upload: {e}")
+            return None
+
+    # Jika tidak ada upload → coba baca sales.csv lokal (cached)
     try:
-        df = pd.read_csv('sales.csv')
-        df['date'] = pd.to_datetime(df['date'])
-        df = df.sort_values('date')
-        
-        # Preprocessing
-        if 'date' in df.columns:
-            df = df.set_index('date').resample('D').sum().fillna(0)
-        elif df.index.name == 'date' or isinstance(df.index, pd.DatetimeIndex):
-            df = df.resample('D').sum().fillna(0)
-        else:
-            date_cols = [col for col in df.columns if 'date' in col.lower() or 'time' in col.lower()]
-            if date_cols:
-                df = df.set_index(date_cols[0]).resample('D').sum().fillna(0)
-        
+        df = _load_default_data()
         return df
+    except FileNotFoundError:
+        st.error("File 'sales.csv' tidak ditemukan. Upload file CSV atau letakkan 'sales.csv' di direktori yang sama dengan aplikasi.")
+        return None
     except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
+        st.error(f"Error loading data: {e}")
         return None
 
 # Fungsi untuk training model
@@ -149,8 +192,8 @@ def train_models(df, target_col='sum_total'):
         'df': df
     }
 
-# Load data
-df = load_data()
+# Load data (menggunakan upload jika ada, kalau tidak pakai sales.csv lokal)
+df = load_data(uploaded_file)
 
 if df is not None:
     # Beranda
